@@ -22,26 +22,28 @@ const config = {
   REFRESH_TOKEN_EXP_SEC: Number(process.env.REFRESH_TOKEN_EXP_SEC || 604800),
   REDIS_USER_TTL: Number(process.env.REDIS_USER_TTL || 86400),
 
-
-  MAIL_SEND: process.env.MAIL_SEND,
-  SENDGRID_API_KEY: process.env.SENDGRID_API_KEY,
-
+  // Mail is sent by notification-service over Kafka — user-service only publishes events.
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
 
   INTERNAL_SERVICE_KEY: process.env.INTERNAL_SERVICE_KEY,
+
+  // Comma-separated allowlist of emails granted the ADMIN role. Baked into the
+  // JWT at issue time, so downstream services can authorize without a lookup.
+  ADMIN_EMAILS: (process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
 }
+
+/** Resolve a user's role from the allowlist. */
+const roleFor = (email) =>
+  config.ADMIN_EMAILS.includes(String(email || '').toLowerCase()) ? 'ADMIN' : 'USER';
+
+config.roleFor = roleFor;
 
 
 if (!config.GOOGLE_CLIENT_ID) {
   throw new Error("GOOGLE_CLIENT_ID environment variable is required");
-}
-
-if (!config.SENDGRID_API_KEY) {
-  throw new Error('SENDGRID_API_KEY missing');
-}
-
-if (!config.MAIL_SEND) {
-  throw new Error('MAIL_SEND missing');
 }
 module.exports = { config };

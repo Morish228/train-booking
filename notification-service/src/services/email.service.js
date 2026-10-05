@@ -1,4 +1,4 @@
-const sgMail = require('@sendgrid/mail');
+const nodemailer = require('nodemailer');
 const logger = require('../config/logger');
 const { config } = require('../config');
 const {
@@ -10,7 +10,15 @@ const {
      getBookingCancelledTemplate,
 } = require('../templates');
 
-sgMail.setApiKey(config.SENDGRID_API_KEY);
+const transporter = nodemailer.createTransport({
+     host: config.SMTP_HOST,
+     port: config.SMTP_PORT,
+     secure: config.SMTP_PORT === 465,
+     auth: {
+          user: config.SMTP_USER,
+          pass: config.SMTP_PASS,
+     },
+});
 
 class EmailService {
      constructor() {
@@ -20,7 +28,7 @@ class EmailService {
 
      async sendWithRetry(msg, retries = 0) {
           try {
-               await sgMail.send(msg);
+               await transporter.sendMail(msg);
                logger.info(`Email sent successfully to ${msg.to}`, {
                     subject: msg.subject,
                     attempt: retries + 1
@@ -47,7 +55,7 @@ class EmailService {
           const msg = {
                to: email,
                from: this.from,
-               subject: 'Your DesignKarle verification code',
+               subject: 'Your RailBook verification code',
                html: getOtpTemplate(otp, ttlMinutes),
           };
 
@@ -58,7 +66,7 @@ class EmailService {
           const msg = {
                to: email,
                from: this.from,
-               subject: 'Welcome to DesignKarle - Email Verified',
+               subject: 'Welcome to RailBook - Email Verified',
                html: getWelcomeTemplate(firstName),
           };
 

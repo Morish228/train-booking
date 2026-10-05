@@ -5,7 +5,7 @@ async function startNotificationService() {
      try {
           logger.info('Starting Notification Service...');
 
-          const requiredEnvVars = ['SENDGRID_API_KEY', 'MAIL_SEND', 'KAFKA_BROKER'];
+          const requiredEnvVars = ['SMTP_USER', 'SMTP_PASS', 'MAIL_SEND', 'KAFKA_BROKER'];
           const missing = requiredEnvVars.filter(varName => !process.env[varName]);
 
           if (missing.length > 0) {

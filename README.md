@@ -1,8 +1,20 @@
-# 🚆 IRCTC Backend - Microservices Architecture
+# 🚆 RailBook — Event-Driven Train Booking Platform
 
-> A production-grade microservices-based railway booking system backend, built for learning and demonstrating enterprise architecture patterns.
+> A microservices backend for railway seat booking. Eight Node/Express services behind a single API gateway, coordinated asynchronously over Kafka — with a saga-based booking flow, Redis distributed seat locks, and Elasticsearch search. Each service owns its own database.
 
-**YouTube Tutorial Series**: https://youtu.be/K_cTtCXCPeY?si=VLIxFdgK2k3XraXA
+<p>
+  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white">
+  <img alt="Express" src="https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white">
+  <img alt="Kafka" src="https://img.shields.io/badge/Kafka-event--driven-231F20?logo=apachekafka">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql&logoColor=white">
+  <img alt="Prisma" src="https://img.shields.io/badge/Prisma-7-2D3748?logo=prisma">
+  <img alt="Redis" src="https://img.shields.io/badge/Redis-Stack-DC382D?logo=redis&logoColor=white">
+  <img alt="Elasticsearch" src="https://img.shields.io/badge/Elasticsearch-8-005571?logo=elasticsearch">
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black">
+</p>
+
+**The flow:** search trains → register with an email OTP → book a seat (held under a Redis distributed lock) → pay via Razorpay → receive a confirmation email. Compensating actions release the seat if payment fails, so the booking is eventually consistent across five databases.
 
 ---
 
@@ -188,8 +200,8 @@ docker compose version
 
 #### 1. Clone the repository
 ```bash
-git clone https://github.com/YOUR_USERNAME/irctc-backend.git
-cd irctc-backend
+git clone https://github.com/Morish228/train-booking.git
+cd train-booking
 ```
 
 #### 2. Start the infrastructure stack
@@ -227,7 +239,23 @@ cp .env.example .env
 
 ### Running the Application
 
-Open one terminal per service. The recommended startup order respects Kafka consumer dependencies:
+**One command (recommended):**
+
+```bash
+npm run infra:up     # Postgres, Redis, Kafka, Elasticsearch via Docker
+npm run start:all    # all 8 services, in one terminal, with prefixed output
+npm run seed         # populate demo data
+```
+
+`start:all` spawns every service as a child process and prefixes each log line with the service name, so a single terminal is enough. Ctrl+C stops them all. Add `--frontend` to include the React dev server:
+
+```bash
+npm run start:all -- --frontend
+```
+
+It also probes Postgres, Redis, Kafka and Elasticsearch first, and tells you to run `npm run infra:up` if any are down — rather than letting eight services fail one by one.
+
+**Or manually** — one terminal per service, in this order (it respects Kafka consumer dependencies):
 
 ```bash
 # 1. Infrastructure
@@ -262,6 +290,46 @@ cd frontend && npm run dev
 ```
 
 Frontend will be available at **http://localhost:3000** and proxies API calls to the gateway at **http://localhost:4000**.
+
+---
+
+### Seeding demo data
+
+With the stack running, populate it with stations, trains, routes and schedules:
+
+```bash
+node scripts/seed.js
+```
+
+The script authenticates through the gateway — registering a demo user and reading its OTP straight off Kafka if the account does not exist yet — then creates everything **through the API**, never the database. That means the Kafka pipeline (`admin → inventory → search`) fires exactly as it does in normal use, so Elasticsearch is populated as a side effect.
+
+| Seeded | |
+|---|---|
+| **6 stations** | NDLS, MMCT, HWH, MAS, SBC, PUNE |
+| **3 trains** | Rajdhani Express (12 seats), Shatabdi Express (10), Coromandel Express (14) |
+| **Routes** | multi-leg, with arrival/departure times and distances |
+| **Schedules** | the next 7 days for every train |
+
+The script is safe to re-run — it skips anything that already exists.
+
+Default login: `demo.admin@example.com` / `DemoPass123!`
+
+To rebuild from a clean slate:
+
+```bash
+# 1. wipe service data
+docker exec postgres psql -U admin -d admin_service_database \
+  -c "TRUNCATE stations, trains, seats, routes, route_stations, schedules CASCADE;"
+
+# 2. restart search-service. With ES_RECREATE_INDICES=true in its .env it
+#    deletes and rebuilds the Elasticsearch indices with fresh mappings,
+#    which also clears any stale documents.
+
+# 3. re-seed
+node scripts/seed.js
+```
+
+Try it: search **NDLS → MMCT**.
 
 ---
 

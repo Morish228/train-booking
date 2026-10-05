@@ -163,7 +163,7 @@ async function forwardRequest(serviceUrl, path, method, data, headers, circuitBr
                };
           }
 
-          // Network error or service down--You would have seen this in video
+          // Network error, or the upstream service is down
           logger.error(`Network error while calling ${serviceUrl}:`, err.message);
           throw new ServiceUnavailableError(`Service temporarily unavailable: ${err.message}`);
      }

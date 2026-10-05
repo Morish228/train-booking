@@ -1,0 +1,98 @@
+# =============================================================================
+# Production overlay — heap tuning + hardening.
+#
+# NOT a replacement for docker-compose.yml. Compose merges it on top:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Deliberately a separate file rather than docker-compose.override.yml,
+# because that filename is auto-loaded and is currently used for the local
+# WSL IPv6 workaround — merging the two would apply local hacks in prod.
+#
+# Requires these in the environment (or a .env beside this file):
+#   POSTGRES_PASSWORD, REDIS_PASSWORD, PGADMIN_PASSWORD
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # POSTGRES
+  # ---------------------------------------------------------------------------
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    ports:
+      # 127.0.0.1: prefix = bound to loopback only. Reachable over an SSH
+      # tunnel for debugging, never from the internet. The stack itself talks
+      # to `postgres:5432` over the bridge network and never needs this.
+      - "127.0.0.1:5432:5432"
+
+  # ---------------------------------------------------------------------------
+  # REDIS — password + hard memory cap so it can never grow unbounded
+  # ---------------------------------------------------------------------------
+  redis:
+    environment:
+      REDIS_ARGS: >-
+        --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+        --maxmemory 200mb
+        --maxmemory-policy allkeys-lru
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  # ---------------------------------------------------------------------------
+  # PGADMIN — loopback only, password from env (was admin/admin)
+  # ---------------------------------------------------------------------------
+  pgadmin:
+    environment:
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?PGADMIN_PASSWORD must be set}
+    ports:
+      - "127.0.0.1:8081:80"
+
+  # ---------------------------------------------------------------------------
+  # ZOOKEEPER — default heap is 512m; it idles well under 256m
+  # ---------------------------------------------------------------------------
+  zookeeper:
+    environment:
+      KAFKA_HEAP_OPTS: "-Xms128m -Xmx256m"
+    ports:
+      - "127.0.0.1:2181:2181"
+
+  # ---------------------------------------------------------------------------
+  # KAFKA — default heap is 1g; 512m is plenty at demo scale.
+  # Advertised listeners keep the internal name (services connect to
+  # kafka:9092) plus a loopback host listener for debugging with kcat etc.
+  # ---------------------------------------------------------------------------
+  kafka:
+    environment:
+      KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092,PLAINTEXT_HOST://127.0.0.1:9093"
+    ports:
+      - "127.0.0.1:9093:9093"
+
+  # ---------------------------------------------------------------------------
+  # KAFKA-UI — Spring Boot, no need for a large default heap
+  # ---------------------------------------------------------------------------
+  kafka-ui:
+    environment:
+      JAVA_OPTS: "-Xmx192m"
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  # ---------------------------------------------------------------------------
+  # ELASTICSEARCH — heap is the dominant cost; 384m handles a demo dataset.
+  # Keep xms == xmx to avoid heap-resize pauses.
+  # ---------------------------------------------------------------------------
+  elasticsearch:
+    environment:
+      ES_JAVA_OPTS: "-Xms384m -Xmx384m"
+    ports:
+      - "127.0.0.1:9200:9200"
+
+  # ---------------------------------------------------------------------------
+  # KIBANA — Node process; cap V8 old-space
+  # ---------------------------------------------------------------------------
+  kibana:
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=384"
+    ports:
+      - "127.0.0.1:5601:5601"

@@ -12,9 +12,20 @@ const createStation = async (data) => {
           throw new ConflictError('Station code already exists');
      }
 
-     const station = await prisma.station.create({
-          data
-     });
+     let station;
+     try {
+          station = await prisma.station.create({
+               data
+          });
+     } catch (err) {
+          // `name` is unique as well, and the check above only covers `code`.
+          // Without this, a name collision surfaces as a raw Prisma P2002 ->
+          // HTTP 500 instead of a 409.
+          if (err.code === 'P2002') {
+               throw new ConflictError('Station name or code already exists');
+          }
+          throw err;
+     }
 
      logger.info('Station Created', { id: station.id, code: station.code });
 

@@ -37,10 +37,14 @@ function requireAuth(req, res, next) {
           // Attach user context to request for downstream services
           req.user = {
                id: payload.id,
+               role: payload.role || 'USER',
           };
 
-          // Add user ID to headers for proxied requests
+          // Overwrite (never trust client-supplied) identity headers for
+          // proxied requests. Writing here after verification means a forged
+          // x-user-id / x-user-role from the caller is replaced.
           req.headers['x-user-id'] = payload.id.toString();
+          req.headers['x-user-role'] = payload.role || 'USER';
 
           logger.debug(`User ${payload.id} authenticated successfully`);
 

@@ -1,0 +1,13 @@
+{
+  "name": "railbook",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Event-driven train booking platform — 8 Node/Express microservices coordinated over Kafka, with PostgreSQL (Prisma), Redis and Elasticsearch",
+  "scripts": {
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "start:all": "node scripts/start-all.js",
+    "seed": "node scripts/seed.js"
+  },
+  "license": "MIT"
+}

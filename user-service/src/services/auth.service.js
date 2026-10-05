@@ -44,8 +44,11 @@ const verifyOTP = async(otp, otpSessionId) =>{
 
      await notificationProducer.sendWelcomeEmail(meta.email, meta.firstName);
      logger.info(`Welcome email queued for ${meta.email}`);
-     return user;
-     
+
+     // Never return the stored hash to the client — same shape `login` returns.
+     const { password: _password, ...safeUser } = user;
+     return safeUser;
+
 }
 
 const login = async(email, password, deviceId) =>{
@@ -65,8 +68,9 @@ const login = async(email, password, deviceId) =>{
      if(!doesPasswordMatch){
           throw new UnauthorizedError("Invalid email or password", "INVALID_CREDENTIALS");
      }
-     const accessToken = generateAccessToken(existingUser.id);
-     const refreshToken = generateRefreshToken(existingUser.id);
+     const role = config.roleFor(existingUser.email);
+     const accessToken = generateAccessToken(existingUser.id, role);
+     const refreshToken = generateRefreshToken(existingUser.id, role);
      const {jti} = jwt.decode(refreshToken);
      await redis.set(`refresh:${existingUser.id}:${deviceId}`, jti, 'EX', config.REFRESH_TOKEN_EXP_SEC);
      const {password: _password, ...safeUser} = existingUser;
@@ -86,8 +90,10 @@ const rotateRefreshToken = async(refreshToken, deviceId) =>{
           await redis.del(`refresh:${userId}:${deviceId}`);
           throw new ForbiddenError("Refresh token reused", "LOGIN AGAIN")
      }
-     const newAccessToken = generateAccessToken(payload.id);
-     const newRefreshToken = generateRefreshToken(payload.id);
+     // Preserve the role across rotation — it came in on the refresh token.
+     const role = payload.role || 'USER';
+     const newAccessToken = generateAccessToken(payload.id, role);
+     const newRefreshToken = generateRefreshToken(payload.id, role);
      const {jti: newJti} = jwt.decode(newRefreshToken);
      await redis.set(`refresh:${payload.id}:${deviceId}`, newJti, 'EX', config.REFRESH_TOKEN_EXP_SEC);
      return {newAccessToken, newRefreshToken};
@@ -160,8 +166,9 @@ const verifyGoogleIdToken = async(idToken, deviceId) =>{
           })
      })
 
-     const accessToken = generateAccessToken(user.id);
-     const refreshToken = generateRefreshToken(user.id);
+     const role = config.roleFor(user.email);
+     const accessToken = generateAccessToken(user.id, role);
+     const refreshToken = generateRefreshToken(user.id, role);
      const {jti} = jwt.decode(refreshToken);
      await redis.set(`refresh:${user.id}:${deviceId}`, jti, 'EX', config.REFRESH_TOKEN_EXP_SEC);
      const {password: _password, ...safeUser} = user;
